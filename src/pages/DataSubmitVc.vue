@@ -68,12 +68,12 @@
           <el-date-picker v-model="formData.reportTime" type="date" placeholder="选择日期"></el-date-picker>
         </el-form-item>
         <el-row>
-          <el-col :span="12">
+          <el-col :span="13">
             <el-form-item label="病畜数">
               <el-input-number v-model="formData.diseaseCount" controls-position="right"></el-input-number>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="13">
             <el-form-item label="死亡数">
               <el-input-number v-model="formData.deathCount" controls-position="right"></el-input-number>
             </el-form-item>
@@ -281,7 +281,7 @@ const formData = reactive({
   insectspecies: null,
 });
 const rules = {};
-// 假设服务器返回了序列数据 }
+// 假设服务器返回了序列数据
 const router = useRouter();
 
 const showResult = ref(true)
@@ -396,7 +396,7 @@ function handleFileChange(file) {
 
 <style scoped>
 .formContainer {
-  width: 1400px;
+  width: 1200px;
   margin-left: px;
   display: flex;
   flex-direction: row;
@@ -441,7 +441,6 @@ function handleFileChange(file) {
 .samplemessageContainer .el-form-item,
 .outbreakContainer .el-form-item {
   margin-left: 80px;
-  margin-right: 80px;
   max-width: 400px;
 }
 

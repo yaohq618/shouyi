@@ -1,30 +1,37 @@
 <template>
-  <div>
-    <el-container>
-      <SidebarVc class="siderbar"></SidebarVc>
-      <el-container class="headermain">
-        <HeaderVc></HeaderVc>
-        <el-main>
-          <router-view/>
-        </el-main>
-      </el-container>
-    </el-container>
+  <div class="container">
+    <router-view></router-view>
   </div>
 </template>
 
 <script setup>
-import SidebarVc from './components/SidebarVc'
-import HeaderVc from './components/HeaderVc'
+import { useRouter } from 'vue-router';
+const router = useRouter();
+import request from "./utils/request"
 
+const debounce = (fn, delay) => {
+  let timer = null;
+  return function () {
+    let context = this;
+    let args = arguments;
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      fn.apply(context, args);
+    }, delay);
+  }
+}
+
+const _ResizeObserver = window.ResizeObserver;
+window.ResizeObserver = class ResizeObserver extends _ResizeObserver{
+  constructor(callback) {
+    callback = debounce(callback, 16);
+    super(callback);
+  }
+}
 
 
 </script>
 
 <style scoped>
-.headermain{
-  display:flex;
-  flex-direction: column ;
-}
-
 
 </style>

@@ -10,20 +10,20 @@
         <div class="query-sequence">
           <label for="querySequence">请输入对比序列:</label>
           <textarea
-            id="querySequence"
-            v-model="formData.querySequence"
-            cols="30"
-            rows="10"
+              id="querySequence"
+              v-model="formData.querySequence"
+              cols="30"
+              rows="10"
           ></textarea>
         </div>
         <div class="file-upload">
           <label for="fileUpload">选择文件上传:</label>
           <input
-            type="file"
-            id="fileUpload"
-            accept=".fasta,.faa"
-            @change="handleFileUpload"
-            style="display: none"
+              type="file"
+              id="fileUpload"
+              accept=".fasta,.faa"
+              @change="handleFileUpload"
+              style="display: none"
           />
           <label for="fileUpload" class="file-label">{{ selectedFileName }}</label>
         </div>
@@ -31,7 +31,7 @@
         <div class="database-selection">
           <label for="databaseSelection">选择数据库:</label>
           <select id="databaseSelection" v-model="formData.selectedDatabase">
-            <option value="SSU">SSU rRNA RNA 序列</option>
+            <option value="SSU">SSU rRNA RNA 序列 (18s)</option>
             <option value="gp60">gp60 序列</option>
           </select>
         </div>
@@ -43,11 +43,19 @@
         重置
       </button>
     </div>
+    <router-view></router-view>
   </div>
 </template>
 
+
 <script setup>
 import { ref, reactive } from "vue";
+import { useRouter } from "vue-router";
+const router = useRouter()
+const expandedIndex = ref(null);
+import {useBlastStore} from '@/store/blast'
+
+const store = useBlastStore()
 
 const formData = reactive({
   jobTitle: "",
@@ -57,14 +65,90 @@ const formData = reactive({
 });
 
 const selectedFileName = ref("未选择任何文件");
+const topResults = ref([]);
+
+const selectedSequence = ref(null);
 
 function handleFileUpload(event) {
   const file = event.target.files[0];
   if (file) {
     selectedFileName.value = file.name;
     formData.file = file;
+    //store存储file
+    store.setFormDataFile(file)
   }
 }
+
+// 新增一个下载文件的方法
+function downloadFile(data, fileName) {
+  const blob = new Blob([data], { type: 'text/plain' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName; // 指定下载文件的名称
+  document.body.appendChild(link);
+  link.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(link);
+}
+
+// 新增一个排序和过滤 BLAST 结果的方法
+function filterAndSortBlastResult(result) {
+  // 假设每一行都是以制表符分隔的字段
+  const lines = result.split('\n').filter(line => line.trim() !== '');
+  const parsedResults = lines.map(line => {
+    const [queryId, subjectId, identity, alignmentLength, queryLength] = line.split('\t').map((val, index) => {
+      return index === 2 || index === 3 || index === 4 ? parseFloat(val) : val;
+    });
+
+    // 计算匹配长度是否超过序列长度的60%
+    const isMatchLengthValid = (alignmentLength / queryLength * 100) > 60;
+
+    return {
+      queryId,
+      subjectId,
+      identity,
+      alignmentLength,
+      queryLength,
+      isMatchLengthValid
+    };
+  }).filter(result => result.identity > 80 && result.isMatchLengthValid);
+
+  // 按照一致性降序排列，如果一致性相同则按对齐长度降序排列
+  const sortedResults = parsedResults.sort((a, b) => {
+    if (b.identity !== a.identity) {
+      return b.identity - a.identity; // 按一致性降序
+    }
+    return b.alignmentLength - a.alignmentLength; // 如果一致性相同，按对齐长度降序
+  });
+
+  // 取前五个结果
+  const topFiveResults = sortedResults.slice(0, 5);
+
+  // 对于每个结果，解析 subjectId 并填充相应的字段
+  const finalResults = topFiveResults.map(result => {
+    const parts = result.subjectId.split('_');
+    const sequenceId = parts[0];
+    const sequenceName = parts.length > 1 ? parts.slice(1).join('_') : '';
+    const species = parts.length > 2 ? parts[2] : ''; // 第二个下划线后的内容
+    const subtype = parts.length > 3 ? parts[3] : '-'; // 第三个下划线后的内容
+
+    return {
+      ...result,
+      sequenceId,
+      sequenceName,
+      species,
+      subtype
+    };
+  });
+
+  return finalResults;
+}
+
+
+
+
+
 
 async function submitBlast() {
   if (!validateForm()) {
@@ -72,24 +156,36 @@ async function submitBlast() {
   }
 
   const formDataToSend = new FormData();
-  formDataToSend.append("jobTitle", formData.jobTitle);
-  formDataToSend.append("querySequence", formData.querySequence);
+  formDataToSend.append("file1", formData.file); // 仅上传一个文件
   formDataToSend.append("selectedDatabase", formData.selectedDatabase);
-
-  if (formData.file) {
-    formDataToSend.append("file", formData.file);
-  }
+  formDataToSend.append("blastType", formData.blastType || "blastn"); // 默认BLAST类型为blastn
 
   try {
-    const response = await fetch("/api/blast", {
+    const response = await fetch("http://localhost:8087/api/blast/upload", {
       method: "POST",
       body: formDataToSend,
     });
 
     if (response.ok) {
-      const result = await response.json();
+      const result = await response.text(); // 直接读取纯文本
       console.log("Blast 成功:", result);
       alert("Blast 成功！");
+      
+      // 过滤和排序 BLAST 结果
+      topResults.value = filterAndSortBlastResult(result);
+
+      //存储到store中的blastResults
+      store.setBlastResults(topResults)
+      
+      // 下载排序后的比对结果文件
+      const sortedResult = topResults.value.map(result => [
+        result.subjectId,
+        result.identity,
+        result.alignmentLength
+      ].join('\t')).join('\n');
+      downloadFile(sortedResult, 'sorted_blast_result.fasta');
+
+      router.push('/blast/resultSSU');
     } else {
       console.error("Blast 失败:", response.statusText);
       alert("Blast 失败，请重试！");
@@ -122,8 +218,15 @@ function resetForm() {
   formData.file = null;
   selectedFileName.value = "未选择任何文件";
   formData.selectedDatabase = "SSU"; // 重置为默认值
+  topResults.value = [];
+  selectedSequence.value = null;
 }
+
+
 </script>
+
+
+
 
 <style scoped>
 .container {
@@ -232,7 +335,6 @@ form {
   display: flex;
   justify-content: space-around;
   margin-top: 20px;
-  
 }
 
 .blast-button,
@@ -243,7 +345,7 @@ form {
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.3s ease;
-  margin-left:40px;
+  margin-left: 40px;
 }
 
 .blast-button {
@@ -263,10 +365,45 @@ form {
 .reset-button:hover {
   background-color: #5a6268;
 }
+
+
+
+/*------------------*/
+.result-container {
+  margin: 20px auto;
+  width: 1100px;
+}
+
+.title {
+  margin-bottom: 20px;
+  font-size: 16px; /* 调整标题字体大小 */
+  color: #333;
+  text-align:center;
+}
+
+.info-section {
+  margin-bottom: 20px;
+}
+
+.alignment-results {
+  width: 100%;
+}
+
+.alignment-result-details {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.result-details {
+  padding: 10px;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
 </style>
-
-
-
-
-
-

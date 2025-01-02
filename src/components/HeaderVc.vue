@@ -14,7 +14,7 @@
     </el-breadcrumb>
 
     <!--下拉菜单-->
-    <el-dropdown>
+    <el-dropdown @command="handleCommand">
       <span class="el-dropdown-link">
         <el-avatar :size="30" :src="require('@/assets/avatar.jpg')" />
         <el-icon class="el-icon--right">
@@ -23,8 +23,8 @@
       </span>
       <template #dropdown>
         <el-dropdown-menu>  
-          <el-dropdown-item>张三</el-dropdown-item>
-          <el-dropdown-item>退出</el-dropdown-item>
+          <el-dropdown-item command="peoplecenter">张三</el-dropdown-item>
+          <el-dropdown-item command="logout">退出</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -35,11 +35,53 @@
 import { ref, computed } from 'vue';
 import { Expand, Fold,ArrowDown  } from '@element-plus/icons-vue';
 import {useStore} from 'vuex'
+import { ElMessage, ElMessageBox } from 'element-plus';
 const store = useStore();
 
 const isCollapse = computed(() => store.state.isCollapse);
 const toggleNavCollapse = () => {
   store.commit('toggleSidebar',!isCollapse.value)
+}
+
+import {useRouter} from "vue-router"
+import {useTokenStore} from "@/store/mytoken"
+import {useUserInfoStore} from "@/store/userInfo"
+const router = useRouter();
+const tokenStore = useTokenStore()
+const userInfoStore = useUserInfoStore()
+
+const handleCommand = (command)=>{
+  if(command == 'logout'){
+    ElMessageBox.confirm(
+      '您确认要退出吗？',
+      '温馨提示',
+      {
+        confirmButtonText:'确认',
+        cancelButtonText:'取消',
+        type:'warning',
+      }
+    )
+    .then(async()=>{
+      console.log("退出登录");
+      //清空pinia中存储的token及个人信息
+      tokenStore.removeToken()
+      userInfoStore.removeInfo()
+      router.push("/login")
+      ElMessage({
+        type:'success',
+        message:'退出登录成功',
+      })
+    })
+    .catch(()=>{
+      console.log("取消退出登录");
+      ElMessage({
+        type:'info',
+        message:'用户取消了退出登录'
+      })
+    })
+  }else{
+    router.push('/'+command)
+  }
 }
 
 </script>
